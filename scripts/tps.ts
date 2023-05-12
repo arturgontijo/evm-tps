@@ -121,19 +121,23 @@ const main = async () => {
     token = await deploy(deployer);
     let tx1 = await token.start({ gasLimit, gasPrice });
     await tx1.wait();
+    // Sending a first txn because it is expensive than the next ones.
+    let probeTx = await token.mintTo(alice.address, 1, { gasLimit, gasPrice });
+    await probeTx.wait();
   } else token = (await ethers.getContractFactory("SimpleToken", deployer)).attach(TOKEN_ADDRESS);
 
   let txpool_max_length = TXPOOL_MAX_LENGTH;
-  // We pre calculate the max txn per block we can get and set the txpool max size to twice as it is.
+  // We pre calculate the max txn per block we can get and set the txpool max size to 3x as it is.
   if (txpool_max_length === -1) {
     console.log(`[Txpool] Trying to get a proper Txpool max length...`);
-    let getGasTx = await token.mintTo(alice.address, 1, { gasLimit, gasPrice });
-    let receipt = await getGasTx.wait();
+    let getGasTx = await token.estimateGas.mintTo(alice.address, 1, { gasLimit, gasPrice });
     let last_block = await ethers.provider.getBlock("latest");
-    let max_txn_block = last_block.gasLimit.div(receipt.gasUsed).toNumber();
-    console.log(`[Txpool] max txn per block: ${max_txn_block}`);
-    txpool_max_length = Math.round((max_txn_block * 2) / 1000) * 1000;
-    console.log(`[Txpool] max length: ${txpool_max_length}`);
+    console.log(`[Txpool] Block gasLimit   : ${last_block.gasLimit}`);
+    console.log(`[Txpool] Txn gasUsed      : ${getGasTx}`);
+    let max_txn_block = last_block.gasLimit.div(getGasTx).toNumber();
+    console.log(`[Txpool] Max txn per Block: ${max_txn_block}`);
+    txpool_max_length = Math.round((max_txn_block * 3) / 1000) * 1000;
+    console.log(`[Txpool] Max length       : ${txpool_max_length}`);
   }
 
   let amountBefore = await token.balanceOf(alice.address);
