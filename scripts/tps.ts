@@ -130,11 +130,11 @@ const main = async () => {
   // We pre calculate the max txn per block we can get and set the txpool max size to 3x as it is.
   if (txpool_max_length === -1) {
     console.log(`[Txpool] Trying to get a proper Txpool max length...`);
-    let getGasTx = await token.estimateGas.mintTo(alice.address, 1, { gasLimit, gasPrice });
+    let estimateGasTx = await token.estimateGas.mintTo(alice.address, 1, { gasPrice });
     let last_block = await ethers.provider.getBlock("latest");
     console.log(`[Txpool] Block gasLimit   : ${last_block.gasLimit}`);
-    console.log(`[Txpool] Txn gasUsed      : ${getGasTx}`);
-    let max_txn_block = last_block.gasLimit.div(getGasTx).toNumber();
+    console.log(`[Txpool] Txn estimateGas  : ${estimateGasTx}`);
+    let max_txn_block = last_block.gasLimit.div(estimateGasTx).toNumber();
     console.log(`[Txpool] Max txn per Block: ${max_txn_block}`);
     txpool_max_length = Math.round((max_txn_block * 3) / 1000) * 1000;
     console.log(`[Txpool] Max length       : ${txpool_max_length}`);
