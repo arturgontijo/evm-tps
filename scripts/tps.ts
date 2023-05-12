@@ -6,7 +6,7 @@ import { deploy } from "./common";
 import { Wallet } from "@ethersproject/wallet";
 import { SimpleToken } from "../typechain-types";
 
-const ETHEREUM_RPC_ENDPOINT: string = process.env.ETHEREUM_RPC_ENDPOINT || "http://127.0.0.1:8545";
+const ETHEREUM_JSONRPC_ENDPOINT: string = process.env.ETHEREUM_JSONRPC_ENDPOINT || "http://127.0.0.1:8545";
 const ETHEREUM_JSONRPC_VARIANT: string = process.env.ETHEREUM_JSONRPC_VARIANT || "substrate";
 
 const DEPLOYER_PK: string = process.env.DEPLOYER_PK || "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342";
@@ -121,7 +121,7 @@ const main = async () => {
   let gasPrice = await ethers.provider.getGasPrice();
   let gasLimit = ethers.BigNumber.from(GAS_LIMIT);
 
-  let url = ETHEREUM_RPC_ENDPOINT;
+  let url = ETHEREUM_JSONRPC_ENDPOINT;
 
   const staticProvider = new ethers.providers.StaticJsonRpcProvider(url, { name: 'tps', chainId });
 
