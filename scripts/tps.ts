@@ -6,6 +6,9 @@ import { deploy } from "./common";
 import { Wallet } from "@ethersproject/wallet";
 import { SimpleToken } from "../typechain-types";
 
+const ETHEREUM_RPC_ENDPOINT: string = process.env.ETHEREUM_RPC_ENDPOINT || "http://127.0.0.1:8545";
+const ETHEREUM_JSONRPC_VARIANT: string = process.env.ETHEREUM_JSONRPC_VARIANT || "substrate";
+
 const DEPLOYER_PK: string = process.env.DEPLOYER_PK || "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342";
 const TOKEN_ADDRESS: string = process.env.TOKEN_ADDRESS || "";
 
@@ -18,18 +21,24 @@ const TXPOOL_CHECK_DELAY: number = parseInt(process.env.TXPOOL_CHECK_DELAY as st
 const DELAY: number = parseInt(process.env.DELAY as string) || 0;
 
 const getTxPoolStatus = async (url: string) => {
+  let method = "author_pendingExtrinsics";
+  if (ETHEREUM_JSONRPC_VARIANT === "geth") method = "txpool_content";
+  else if (ETHEREUM_JSONRPC_VARIANT === "parity") method = "parity_pendingTransactions";
+
   let r = await axios.post(
     url,
-    {
-      jsonrpc: "2.0",
-      method: "author_pendingExtrinsics",
-      params: [],
-      id: 1
-    },
+    { jsonrpc: "2.0", method, id: 1 },
     { headers: { 'Content-Type': 'application/json' } },
   );
 
   if (r.data == undefined || r.data.error) return [];
+  if (ETHEREUM_JSONRPC_VARIANT === "geth") {
+    let pending: any = [];
+    for (let k of Object.keys(r.data.result.pending)) {
+      pending = pending.concat(Object.keys(r.data.result.pending[k]));
+    }
+    return pending;
+  }
   return r.data.result;
 }
 
@@ -112,8 +121,7 @@ const main = async () => {
   let gasPrice = await ethers.provider.getGasPrice();
   let gasLimit = ethers.BigNumber.from(GAS_LIMIT);
 
-  let url = ethers.provider.connection.url;
-  url = url.replace('//localhost', '//127.0.0.1');
+  let url = ETHEREUM_RPC_ENDPOINT;
 
   const staticProvider = new ethers.providers.StaticJsonRpcProvider(url, { name: 'tps', chainId });
 
