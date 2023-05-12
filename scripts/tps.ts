@@ -48,6 +48,7 @@ const sendRawTransactions = async (
   };
 
   let txpool;
+  let check_txpool = false;
   let payload;
   let r;
   let last;
@@ -81,7 +82,7 @@ const sendRawTransactions = async (
     if (unsigned.nonce! % 1000 == 0) console.log(`[  TPS ] NextNonce: ${unsigned.nonce} / ${final_nonce}`);
 
     // Check Txpool
-    if (counter % txpool_max_length == 0) {
+    if (counter % txpool_max_length == 0 || check_txpool) {
       txpool = await getTxPoolStatus(url);
       console.log(`[Txpool] NextNonce: ${unsigned.nonce} / ${final_nonce} [len=(${JSON.stringify(txpool.length)})]`);
       let last_length = 0;
@@ -92,7 +93,10 @@ const sendRawTransactions = async (
         }
         await new Promise(r => setTimeout(r, TXPOOL_CHECK_DELAY));
         txpool = await getTxPoolStatus(url);
+        check_txpool = true;
       }
+      if (txpool.length < (txpool_max_length / 2)) check_txpool = false;
+      if (check_txpool) await new Promise(r => setTimeout(r, TXPOOL_CHECK_DELAY));
     }
     counter++;
   };
@@ -127,7 +131,7 @@ const main = async () => {
   } else token = (await ethers.getContractFactory("SimpleToken", deployer)).attach(TOKEN_ADDRESS);
 
   let txpool_max_length = TXPOOL_MAX_LENGTH;
-  // We pre calculate the max txn per block we can get and set the txpool max size to 3x as it is.
+  // We pre calculate the max txn per block we can get and set the txpool max size to 2x as it is.
   if (txpool_max_length === -1) {
     console.log(`[Txpool] Trying to get a proper Txpool max length...`);
     let estimateGasTx = await token.estimateGas.mintTo(alice.address, 1, { gasPrice });
@@ -136,7 +140,7 @@ const main = async () => {
     console.log(`[Txpool] Txn estimateGas  : ${estimateGasTx}`);
     let max_txn_block = last_block.gasLimit.div(estimateGasTx).toNumber();
     console.log(`[Txpool] Max txn per Block: ${max_txn_block}`);
-    txpool_max_length = Math.round((max_txn_block * 3) / 1000) * 1000;
+    txpool_max_length = Math.round((max_txn_block * 2) / 1000) * 1000;
     console.log(`[Txpool] Max length       : ${txpool_max_length}`);
   }
 
