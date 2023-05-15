@@ -8,6 +8,7 @@
     "transactions": 1000,
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
+    "txpoolMultiplier": 3,
     "txpoolCheckDelay": 250,
     "delay": 0,
     "estimate": false

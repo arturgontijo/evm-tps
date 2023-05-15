@@ -7,7 +7,7 @@ cd evm-tps
 yarn
 ```
 
-You can change parameters in `config.json` (or via ENV vars):
+You can change parameters in [config.json](./config.json):
 
 1. This will deploy the ERC20 contract and will send 1000 `mintTo()` transactions, asserting final Other's token balance:
 ```json

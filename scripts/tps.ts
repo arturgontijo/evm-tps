@@ -21,6 +21,7 @@ interface TPSConfig {
   transactions: number;
   gasLimit: string;
   txpoolMaxLength: number;
+  txpoolMultiplier: number;
   txpoolCheckDelay: number;
   delay: number;
   estimate: boolean | undefined;
@@ -40,17 +41,18 @@ interface UnsignedTx {
 
 const setup = () => {
   let config: TPSConfig = {
-    endpoint: process.env.ETHEREUM_JSONRPC_ENDPOINT || "http://127.0.0.1:8545",
-    variant: process.env.ETHEREUM_JSONRPC_VARIANT || "substrate",
-    deployerPK: process.env.DEPLOYER_PK || "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
-    otherPK: process.env.OTHER_PK || "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
-    tokenAddress: process.env.TOKEN_ADDRESS || "",
+    endpoint: "http://127.0.0.1:8545",
+    variant: "substrate",
+    deployerPK: "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
+    otherPK: "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
+    tokenAddress: "",
     tokenAssert: true,
-    transactions: parseInt(process.env.TRANSACTIONS as string) || 10000,
-    gasLimit: process.env.GAS_LIMIT || "200000",
-    txpoolMaxLength: parseInt(process.env.TXPOOL_MAX_LENGTH as string) || -1,
-    txpoolCheckDelay: parseInt(process.env.TXPOOL_CHECK_DELAY as string) || 250,
-    delay: parseInt(process.env.DELAY as string) || 0,
+    transactions: 10000,
+    gasLimit: "200000",
+    txpoolMaxLength: -1,
+    txpoolMultiplier: 3,
+    txpoolCheckDelay: 250,
+    delay: 0,
     estimate: false,
     transaction: undefined,
   };
@@ -71,7 +73,7 @@ const estimateOnly = async (config: TPSConfig, provider: StaticJsonRpcProvider, 
     gasPrice: await provider.getGasPrice(),
     chainId: provider.network.chainId,
   };
-  console.log(`[  TPS ] Payload:\n${JSON.stringify(unsigned, null, 2)}\n`);
+  console.log(`[EstGas] Payload:\n${JSON.stringify(unsigned, null, 2)}\n`);
   let estimateGas;
   for (let i = 0; i < config.transactions; i++) {
     estimateGas = await provider.estimateGas(unsigned);
@@ -126,6 +128,7 @@ const sendRawTransactions = async (
   let final_nonce = unsigned.nonce! + config.transactions;
   let counter = 1;
 
+  console.log(`[  TPS ] StartingNonce / FinalNonce -> ${unsigned.nonce} / ${final_nonce}`);
   while (unsigned.nonce! < final_nonce) {
     payload = await signer.signTransaction(unsigned);
     r = await axios.post(
@@ -171,8 +174,10 @@ const sendRawTransactions = async (
     counter++;
   };
 
+  console.log(`[  TPS ] Done!`);
   last = await ethers.provider.getTransaction(last);
-  return last;
+  console.log(`[  TPS ] Waiting for the last transaction's receipt...`);
+  return await last.wait();
 };
 
 const main = async () => {
@@ -215,7 +220,9 @@ const main = async () => {
     console.log(`[Txpool] Txn estimateGas  : ${estimateGasTx}`);
     let max_txn_block = last_block.gasLimit.div(estimateGasTx).toNumber();
     console.log(`[Txpool] Max txn per Block: ${max_txn_block}`);
-    txpool_max_length = Math.round((max_txn_block * 2) / 1000) * 1000;
+    let max_txn_multiplier = max_txn_block * config.txpoolMultiplier;
+    if (max_txn_multiplier > 5000) txpool_max_length = Math.round(max_txn_multiplier / 1000) * 1000;
+    else txpool_max_length = max_txn_multiplier;
     console.log(`[Txpool] Max length       : ${txpool_max_length}`);
   }
 
@@ -229,8 +236,7 @@ const main = async () => {
     await estimateOnly(config, staticProvider, other.address, token);
     execution_time = Date.now() - start;
   } else {
-    let last_tx = await sendRawTransactions(config, deployer, chainId, other.address, token, txpool_max_length);
-    let r = await last_tx.wait();
+    let r = await sendRawTransactions(config, deployer, chainId, other.address, token, txpool_max_length);
 
     execution_time = Date.now() - start;
 
