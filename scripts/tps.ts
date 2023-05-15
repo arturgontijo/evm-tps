@@ -65,7 +65,7 @@ const setup = () => {
 }
 
 const estimateOnly = async (config: TPSConfig, provider: StaticJsonRpcProvider, aliceAddress: string, token: SimpleToken) => {
-  let unsigned = config.transaction || await token.populateTransaction.mintTo(aliceAddress, 1);
+  let unsigned = config.transaction || await token.populateTransaction.transfer(aliceAddress, 1);
   unsigned = {
     ...unsigned,
     gasPrice: await provider.getGasPrice(),
@@ -104,9 +104,9 @@ const getTxPoolStatus = async (config: TPSConfig) => {
 const sendRawTransactions = async (
   config: TPSConfig, signer: Wallet, chainId: number, aliceAddress: string, token: SimpleToken, txpool_max_length: number,
 ) => {
-  console.log(`\n[  TPS ] Sending ${config.transactions} Axios-RAW mintTo() transactions...`);
+  console.log(`\n[  TPS ] Sending ${config.transactions} Axios-RAW transfer() transactions...`);
 
-  let unsigned = config.transaction || await token.populateTransaction.mintTo(aliceAddress, 1);;
+  let unsigned = config.transaction || await token.populateTransaction.transfer(aliceAddress, 1);;
   unsigned = {
     ...unsigned,
     gasLimit: ethers.BigNumber.from(config.gasLimit),
@@ -165,7 +165,7 @@ const sendRawTransactions = async (
         txpool = await getTxPoolStatus(config);
         check_txpool = true;
       }
-      if (txpool.length < (txpool_max_length / 2)) check_txpool = false;
+      if (txpool.length < (txpool_max_length * 0.80)) check_txpool = false;
       if (check_txpool) await new Promise(r => setTimeout(r, config.txpoolCheckDelay));
     }
     counter++;
@@ -193,18 +193,23 @@ const main = async () => {
 
   if (tokenAddress === "" && config.transaction === undefined) {
     token = await deploy(deployer);
+    console.log(`\n[ Token] Calling start()...`);
     let tx1 = await token.start({ gasLimit, gasPrice });
     await tx1.wait();
-    // Sending a first txn because it is expensive than the next ones.
-    let probeTx = await token.mintTo(other.address, 1, { gasLimit, gasPrice });
+    console.log(`[ Token] Calling mintTo()...`);
+    let mintTx = await token.mintTo(deployer.address, 1000000000, { gasLimit, gasPrice });
+    await mintTx.wait();
+    console.log(`[ Token] Calling probe transfer()...`);
+    // First call to transfer() is more expensive than the next ones due to initial variables setup.
+    let probeTx = await token.transfer(other.address, 1, { gasLimit, gasPrice });
     await probeTx.wait();
   } else token = (await ethers.getContractFactory("SimpleToken", deployer)).attach(tokenAddress);
 
   let txpool_max_length = config.txpoolMaxLength;
-  // We pre calculate the max txn per block we can get and set the txpool max size to 2x as it is.
+  // We pre calculate the max txn per block we can get and set the txpool max size to 3x as it is.
   if (txpool_max_length === -1) {
     console.log(`\n[Txpool] Trying to get a proper Txpool max length...`);
-    let estimateGasTx = await token.estimateGas.mintTo(other.address, 1, { gasPrice });
+    let estimateGasTx = await token.estimateGas.transfer(other.address, 1, { gasPrice });
     let last_block = await ethers.provider.getBlock("latest");
     console.log(`[Txpool] Block gasLimit   : ${last_block.gasLimit}`);
     console.log(`[Txpool] Txn estimateGas  : ${estimateGasTx}`);
