@@ -1,38 +1,97 @@
 import { ethers } from "hardhat";
 import axios from "axios";
+import fs from 'fs';
 
 import { deploy } from "./common";
 
 import { Wallet } from "@ethersproject/wallet";
+import { BigNumber } from "@ethersproject/bignumber";
 import { SimpleToken } from "../typechain-types";
+import { StaticJsonRpcProvider } from "@ethersproject/providers";
 
-const ETHEREUM_JSONRPC_ENDPOINT: string = process.env.ETHEREUM_JSONRPC_ENDPOINT || "http://127.0.0.1:8545";
-const ETHEREUM_JSONRPC_VARIANT: string = process.env.ETHEREUM_JSONRPC_VARIANT || "substrate";
+const CONFIG_FILE_PATH: string = './config.json';
 
-const DEPLOYER_PK: string = process.env.DEPLOYER_PK || "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342";
-const TOKEN_ADDRESS: string = process.env.TOKEN_ADDRESS || "";
+interface TPSConfig {
+  endpoint: string;
+  variant: string;
+  deployerPK: string;
+  otherPK: string;
+  tokenAddress: string;
+  tokenAssert: boolean | undefined;
+  transactions: number;
+  gasLimit: string;
+  txpoolMaxLength: number;
+  txpoolCheckDelay: number;
+  delay: number;
+  estimate: boolean | undefined;
+  transaction: UnsignedTx | undefined;
+}
 
-const TRANSACTIONS: number = parseInt(process.env.TRANSACTIONS as string) || 10000;
-const GAS_LIMIT: string = process.env.GAS_LIMIT || "200000";
+interface UnsignedTx {
+  from: string;
+  to: string;
+  value?: BigNumber | string;
+  data: string;
+  gasPrice?: BigNumber | string;
+  gasLimit?: BigNumber | string;
+  nonce?: number;
+  chainId?: number;
+}
 
-const TXPOOL_MAX_LENGTH: number = parseInt(process.env.TXPOOL_MAX_LENGTH as string) || -1;
-const TXPOOL_CHECK_DELAY: number = parseInt(process.env.TXPOOL_CHECK_DELAY as string) || 250;
+const setup = () => {
+  let config: TPSConfig = {
+    endpoint: process.env.ETHEREUM_JSONRPC_ENDPOINT || "http://127.0.0.1:8545",
+    variant: process.env.ETHEREUM_JSONRPC_VARIANT || "substrate",
+    deployerPK: process.env.DEPLOYER_PK || "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
+    otherPK: process.env.OTHER_PK || "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
+    tokenAddress: process.env.TOKEN_ADDRESS || "",
+    tokenAssert: true,
+    transactions: parseInt(process.env.TRANSACTIONS as string) || 10000,
+    gasLimit: process.env.GAS_LIMIT || "200000",
+    txpoolMaxLength: parseInt(process.env.TXPOOL_MAX_LENGTH as string) || -1,
+    txpoolCheckDelay: parseInt(process.env.TXPOOL_CHECK_DELAY as string) || 250,
+    delay: parseInt(process.env.DELAY as string) || 0,
+    estimate: false,
+    transaction: undefined,
+  };
 
-const DELAY: number = parseInt(process.env.DELAY as string) || 0;
+  if (fs.existsSync(CONFIG_FILE_PATH)) {
+    let rawdata = fs.readFileSync(CONFIG_FILE_PATH);
+    let fromJSON = JSON.parse(rawdata.toString());
+    config = { ...config, ...fromJSON };
+  }
 
-const getTxPoolStatus = async (url: string) => {
+  return config;
+}
+
+const estimateOnly = async (config: TPSConfig, provider: StaticJsonRpcProvider, aliceAddress: string, token: SimpleToken) => {
+  let unsigned = config.transaction || await token.populateTransaction.mintTo(aliceAddress, 1);
+  unsigned = {
+    ...unsigned,
+    gasPrice: await provider.getGasPrice(),
+    chainId: provider.network.chainId,
+  };
+  console.log(`[  TPS ] Payload:\n${JSON.stringify(unsigned, null, 2)}\n`);
+  let estimateGas;
+  for (let i = 0; i < config.transactions; i++) {
+    estimateGas = await provider.estimateGas(unsigned);
+  }
+  console.log(`\nLast estimateGas result: ${estimateGas}`);
+}
+
+const getTxPoolStatus = async (config: TPSConfig) => {
   let method = "author_pendingExtrinsics";
-  if (ETHEREUM_JSONRPC_VARIANT === "geth") method = "txpool_content";
-  else if (ETHEREUM_JSONRPC_VARIANT === "parity") method = "parity_pendingTransactions";
+  if (config.variant === "geth") method = "txpool_content";
+  else if (config.variant === "parity") method = "parity_pendingTransactions";
 
   let r = await axios.post(
-    url,
+    config.endpoint,
     { jsonrpc: "2.0", method, id: 1 },
     { headers: { 'Content-Type': 'application/json' } },
   );
 
   if (r.data == undefined || r.data.error) return [];
-  if (ETHEREUM_JSONRPC_VARIANT === "geth") {
+  if (config.variant === "geth") {
     let pending: any = [];
     for (let k of Object.keys(r.data.result.pending)) {
       pending = pending.concat(Object.keys(r.data.result.pending[k]));
@@ -43,18 +102,20 @@ const getTxPoolStatus = async (url: string) => {
 }
 
 const sendRawTransactions = async (
-  signer: Wallet, url: string, chainId: number, aliceAddress: string, token: SimpleToken, txpool_max_length: number,
+  config: TPSConfig, signer: Wallet, chainId: number, aliceAddress: string, token: SimpleToken, txpool_max_length: number,
 ) => {
-  console.log(`\n[  TPS ] Sending ${TRANSACTIONS} Axios-RAW mintTo() transactions...`);
+  console.log(`\n[  TPS ] Sending ${config.transactions} Axios-RAW mintTo() transactions...`);
 
-  let unsigned = await token.populateTransaction.mintTo(aliceAddress, 1);
+  let unsigned = config.transaction || await token.populateTransaction.mintTo(aliceAddress, 1);;
   unsigned = {
     ...unsigned,
-    gasLimit: ethers.BigNumber.from(GAS_LIMIT),
+    gasLimit: ethers.BigNumber.from(config.gasLimit),
     gasPrice: await ethers.provider.getGasPrice(),
     nonce: await signer.getTransactionCount(),
     chainId,
   };
+
+  console.log(`[  TPS ] Payload:\n${JSON.stringify(unsigned, null, 2)}\n`);
 
   let txpool;
   let check_txpool = false;
@@ -62,13 +123,13 @@ const sendRawTransactions = async (
   let r;
   let last;
 
-  let final_nonce = unsigned.nonce! + TRANSACTIONS;
+  let final_nonce = unsigned.nonce! + config.transactions;
   let counter = 1;
 
   while (unsigned.nonce! < final_nonce) {
     payload = await signer.signTransaction(unsigned);
     r = await axios.post(
-      url,
+      config.endpoint,
       {
         jsonrpc: "2.0",
         method: "eth_sendRawTransaction",
@@ -78,7 +139,7 @@ const sendRawTransactions = async (
       { headers: { 'Content-Type': 'application/json' } }
     );
 
-    if (DELAY > 0) await new Promise(r => setTimeout(r, DELAY));
+    if (config.delay > 0) await new Promise(r => setTimeout(r, config.delay));
 
     last = r.data ? r.data.result ? r.data.result : r.data.error : 'Error';
     if (r.status != 200 || last == 'Error') {
@@ -92,7 +153,7 @@ const sendRawTransactions = async (
 
     // Check Txpool
     if (counter % txpool_max_length == 0 || check_txpool) {
-      txpool = await getTxPoolStatus(url);
+      txpool = await getTxPoolStatus(config);
       console.log(`[Txpool] NextNonce: ${unsigned.nonce} / ${final_nonce} [len=(${JSON.stringify(txpool.length)})]`);
       let last_length = 0;
       while (txpool.length > txpool_max_length) {
@@ -100,12 +161,12 @@ const sendRawTransactions = async (
           console.log(`[Txpool] len=(${JSON.stringify(txpool.length)}) is still too high, waiting a bit...`);
           last_length = txpool.length;
         }
-        await new Promise(r => setTimeout(r, TXPOOL_CHECK_DELAY));
-        txpool = await getTxPoolStatus(url);
+        await new Promise(r => setTimeout(r, config.txpoolCheckDelay));
+        txpool = await getTxPoolStatus(config);
         check_txpool = true;
       }
       if (txpool.length < (txpool_max_length / 2)) check_txpool = false;
-      if (check_txpool) await new Promise(r => setTimeout(r, TXPOOL_CHECK_DELAY));
+      if (check_txpool) await new Promise(r => setTimeout(r, config.txpoolCheckDelay));
     }
     counter++;
   };
@@ -115,34 +176,35 @@ const sendRawTransactions = async (
 };
 
 const main = async () => {
-  const [owner, alice] = await ethers.getSigners();
+  const config = setup();
+  console.log(`\n---- Simple EVM TPS Tool ----\n\n${JSON.stringify(config, null, 2)}\n`);
 
   let chainId = (await ethers.provider.getNetwork()).chainId;
   let gasPrice = await ethers.provider.getGasPrice();
-  let gasLimit = ethers.BigNumber.from(GAS_LIMIT);
+  let gasLimit = ethers.BigNumber.from(config.gasLimit);
 
-  let url = ETHEREUM_JSONRPC_ENDPOINT;
+  const staticProvider = new ethers.providers.StaticJsonRpcProvider(config.endpoint, { name: 'tps', chainId });
 
-  const staticProvider = new ethers.providers.StaticJsonRpcProvider(url, { name: 'tps', chainId });
-
-  let deployer = new ethers.Wallet(DEPLOYER_PK, staticProvider);
+  let deployer = new ethers.Wallet(config.deployerPK, staticProvider);
+  let other = new ethers.Wallet(config.otherPK, staticProvider);
 
   let token: SimpleToken;
+  let tokenAddress = config.tokenAddress || config.transaction?.to || "";
 
-  if (TOKEN_ADDRESS === "") {
+  if (tokenAddress === "" && config.transaction === undefined) {
     token = await deploy(deployer);
     let tx1 = await token.start({ gasLimit, gasPrice });
     await tx1.wait();
     // Sending a first txn because it is expensive than the next ones.
-    let probeTx = await token.mintTo(alice.address, 1, { gasLimit, gasPrice });
+    let probeTx = await token.mintTo(other.address, 1, { gasLimit, gasPrice });
     await probeTx.wait();
-  } else token = (await ethers.getContractFactory("SimpleToken", deployer)).attach(TOKEN_ADDRESS);
+  } else token = (await ethers.getContractFactory("SimpleToken", deployer)).attach(tokenAddress);
 
-  let txpool_max_length = TXPOOL_MAX_LENGTH;
+  let txpool_max_length = config.txpoolMaxLength;
   // We pre calculate the max txn per block we can get and set the txpool max size to 2x as it is.
   if (txpool_max_length === -1) {
-    console.log(`[Txpool] Trying to get a proper Txpool max length...`);
-    let estimateGasTx = await token.estimateGas.mintTo(alice.address, 1, { gasPrice });
+    console.log(`\n[Txpool] Trying to get a proper Txpool max length...`);
+    let estimateGasTx = await token.estimateGas.mintTo(other.address, 1, { gasPrice });
     let last_block = await ethers.provider.getBlock("latest");
     console.log(`[Txpool] Block gasLimit   : ${last_block.gasLimit}`);
     console.log(`[Txpool] Txn estimateGas  : ${estimateGasTx}`);
@@ -152,32 +214,46 @@ const main = async () => {
     console.log(`[Txpool] Max length       : ${txpool_max_length}`);
   }
 
-  let amountBefore = await token.balanceOf(alice.address);
+  let amountBefore = await other.getBalance();
+  if (config.tokenAssert) amountBefore = await token.balanceOf(other.address);
 
   const start = Date.now();
 
-  let last_tx = await sendRawTransactions(deployer, url, chainId, alice.address, token, txpool_max_length);
-  let r = await last_tx.wait();
+  let execution_time = start;
+  if (config.estimate) {
+    await estimateOnly(config, staticProvider, other.address, token);
+    execution_time = Date.now() - start;
+  } else {
+    let last_tx = await sendRawTransactions(config, deployer, chainId, other.address, token, txpool_max_length);
+    let r = await last_tx.wait();
 
-  let execution_time = Date.now() - start;
+    execution_time = Date.now() - start;
 
-  // Cleaning few fields before printing it
-  console.log(
-    `\nLast transaction:\n\t
-    "transactionHash": ${r.transactionHash}\t
-    "from": ${r.from}\t
-    "to": ${r.to}\t
-    "blockNumber": ${r.blockNumber}\t
-    "gasUsed": ${r.gasUsed}`
-  );
+    console.log(
+      `\nLast transaction:\n\t
+      "transactionHash": ${r.transactionHash}\t
+      "from": ${r.from}\t
+      "to": ${r.to}\t
+      "blockNumber": ${r.blockNumber}\t
+      "gasUsed": ${r.gasUsed}`
+    );
 
-  let amountAfter = await token.balanceOf(alice.address);
 
-  console.log(
-    `\nAssert(balanceOf): ${amountBefore} + ${TRANSACTIONS} == ${amountAfter} [${(amountBefore.add(TRANSACTIONS)).eq(amountAfter) ? 'OK' : 'FAIL'}]\n`
-  );
+    let amountAfter = await other.getBalance();
+    if (config.tokenAssert) amountAfter = await token.balanceOf(other.address);
+    let value = ethers.BigNumber.from(config.transaction?.value || "0").toNumber();
+    if (value) {
+      console.log(
+        `\nAssert(ETH): ${amountBefore} + (${config.transactions} * ${value}) == ${amountAfter} [${(amountBefore.add(config.transactions * value)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+      );
+    } else {
+      console.log(
+        `\nAssert(balanceOf): ${amountBefore} + (${config.transactions}) == ${amountAfter} [${(amountBefore.add(config.transactions)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+      );
+    }
+  }
 
-  console.log(`Execution time: ${execution_time} ms -> ${(TRANSACTIONS / execution_time) * 1000} TPS`);
+  console.log(`\nExecution time: ${execution_time} ms -> ${(config.transactions / execution_time) * 1000} TPS/RPS`);
 }
 
 main().catch((error) => {

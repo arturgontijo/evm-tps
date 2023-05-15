@@ -1,0 +1,14 @@
+{
+    "endpoint": "http://127.0.0.1:8545",
+    "variant": "substrate",
+    "deployerPK": "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
+    "otherPK": "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
+    "tokenAddress": "",
+    "tokenAssert": true,
+    "transactions": 1000,
+    "gasLimit": "200000",
+    "txpoolMaxLength": -1,
+    "txpoolCheckDelay": 250,
+    "delay": 0,
+    "estimate": false
+}
