@@ -50,7 +50,7 @@ const setup = () => {
     transactions: 10000,
     gasLimit: "200000",
     txpoolMaxLength: -1,
-    txpoolMultiplier: 3,
+    txpoolMultiplier: 2,
     txpoolCheckDelay: 250,
     delay: 0,
     estimate: false,
@@ -159,7 +159,7 @@ const sendRawTransactions = async (
       txpool = await getTxPoolStatus(config);
       console.log(`[Txpool] NextNonce: ${unsigned.nonce} / ${final_nonce} [len=(${JSON.stringify(txpool.length)})]`);
       let last_length = 0;
-      while (txpool.length > txpool_max_length) {
+      while (txpool.length >= txpool_max_length) {
         if (last_length !== txpool.length) {
           console.log(`[Txpool] len=(${JSON.stringify(txpool.length)}) is still too high, waiting a bit...`);
           last_length = txpool.length;
