@@ -14,9 +14,10 @@ You can change parameters in [config.json](./config.json):
 {
     "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
-    "deployerPK": "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
-    "otherPK": "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
+    "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000"],
+    "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
     "tokenAddress": "",
+    "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
     "transactions": 30000,
     "gasLimit": "200000",
@@ -33,9 +34,10 @@ You can change parameters in [config.json](./config.json):
 {
     "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
-    "deployerPK": "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
-    "otherPK": "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
-    "tokenAddress": "0x20c8554eA6dAeD9467BCD202936572828F9D75c9",
+    "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000"],
+    "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
+    "tokenAddress": "0x030c5D377E202F52CF30b7f855e09aC0589D53ab",
+    "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
     "transactions": 30000,
     "gasLimit": "200000",
@@ -48,14 +50,15 @@ You can change parameters in [config.json](./config.json):
 ```
 
 
-3. This one has a `transaction` hardcoded, that is a `transfer()`:
+3. This one has a `transfer()` hardcoded in the `payloads` field:
 ```json
 {
     "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
-    "deployerPK": "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
-    "otherPK": "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
-    "tokenAddress": "0x20c8554eA6dAeD9467BCD202936572828F9D75c9",
+    "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000"],
+    "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
+    "tokenAddress": "0x030c5D377E202F52CF30b7f855e09aC0589D53ab",
+    "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
     "transactions": 30000,
     "gasLimit": "200000",
@@ -64,22 +67,25 @@ You can change parameters in [config.json](./config.json):
     "txpoolCheckDelay": 250,
     "delay": 0,
     "estimate": false,
-    "transaction": {
-        "from": "0x6Be02d1d3665660d22FF9624b7BE0551ee1Ac91b",
-        "to": "0x20c8554eA6dAeD9467BCD202936572828F9D75c9",
-        "data": "0x449a52f8000000000000000000000000004e5062fb8c93c6cf5187bf499d9fa9117dde160000000000000000000000000000000000000000000000000000000000000001"
-    }
+    "payloads": [
+        {
+            "data": "0xa9059cbb000000000000000000000000ea8d69db60401a766e1083beba3a34cafa13151c0000000000000000000000000000000000000000000000000000000000000001",
+            "from": "0x48A78AeA1c4F8C24EDfE7FE0973F05D3f3d1763C",
+            "to": "0x030c5D377E202F52CF30b7f855e09aC0589D53ab"
+        }
+    ]
 }
 ```
 
-4. This one sends ETH (`send()`) via `transaction` field and assert the destination `"to"` ETH balance at the end:
+4. This one sends ETH (`send()`) via `payloads` field and assert the destination `"to"` ETH balance at the end:
 ```json
 {
     "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
-    "deployerPK": "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
-    "otherPK": "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
+    "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342"],
+    "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
     "tokenAddress": "",
+    "tokenAmountToMint": 1000000000,
     "tokenAssert": false,
     "transactions": 30000,
     "gasLimit": "200000",
@@ -88,11 +94,13 @@ You can change parameters in [config.json](./config.json):
     "txpoolCheckDelay": 250,
     "delay": 0,
     "estimate": false,
-    "transaction": {
-        "from": "0x6Be02d1d3665660d22FF9624b7BE0551ee1Ac91b",
-        "to": "0x004e5062fb8C93c6cf5187bF499d9fa9117dDe16",
-        "value": "0x14"
-    }
+    "payloads": [
+        {
+            "from": "0x6Be02d1d3665660d22FF9624b7BE0551ee1Ac91b",
+            "to": "0xEA8D69Db60401A766e1083bebA3A34cAfa13151C",
+            "value": "0x1414"
+        }
+    ]
 }
 ```
 

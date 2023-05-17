@@ -7,16 +7,19 @@ import { deploy } from "./common";
 import { Wallet } from "@ethersproject/wallet";
 import { BigNumber } from "@ethersproject/bignumber";
 import { SimpleToken } from "../typechain-types";
-import { StaticJsonRpcProvider } from "@ethersproject/providers";
+import { StaticJsonRpcProvider, TransactionReceipt } from "@ethersproject/providers";
+import { PopulatedTransaction } from "ethers/lib/ethers";
 
 const CONFIG_FILE_PATH: string = './config.json';
 
 interface TPSConfig {
   endpoint: string;
   variant: string;
-  deployerPK: string;
-  otherPK: string;
+  chainId: number;
+  senders: string[];
+  receivers: string[];
   tokenAddress: string;
+  tokenAmountToMint: number;
   tokenAssert: boolean | undefined;
   transactions: number;
   gasLimit: string;
@@ -25,7 +28,7 @@ interface TPSConfig {
   txpoolCheckDelay: number;
   delay: number;
   estimate: boolean | undefined;
-  transaction: UnsignedTx | undefined;
+  payloads: UnsignedTx[] | PopulatedTransaction[] | undefined;
 }
 
 interface UnsignedTx {
@@ -39,22 +42,42 @@ interface UnsignedTx {
   chainId?: number;
 }
 
+interface Mapping {
+  sender: Wallet;
+  receiver: Wallet;
+  unsigned: UnsignedTx | PopulatedTransaction;
+}
+
 const setup = () => {
   let config: TPSConfig = {
     endpoint: "http://127.0.0.1:8545",
     variant: "substrate",
-    deployerPK: "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342",
-    otherPK: "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
+    chainId: -1,
+    senders: [
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E001",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E002",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E003",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E004"
+    ],
+    receivers: [
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E006",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E007",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E008",
+      "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E009"
+    ],
     tokenAddress: "",
+    tokenAmountToMint: 1000000000,
     tokenAssert: true,
-    transactions: 10000,
+    transactions: 30000,
     gasLimit: "200000",
     txpoolMaxLength: -1,
     txpoolMultiplier: 2,
     txpoolCheckDelay: 250,
     delay: 0,
     estimate: false,
-    transaction: undefined,
+    payloads: undefined,
   };
 
   if (fs.existsSync(CONFIG_FILE_PATH)) {
@@ -67,7 +90,7 @@ const setup = () => {
 }
 
 const estimateOnly = async (config: TPSConfig, provider: StaticJsonRpcProvider, aliceAddress: string, token: SimpleToken) => {
-  let unsigned = config.transaction || await token.populateTransaction.transfer(aliceAddress, 1);
+  let unsigned = config.payloads![0] || await token.populateTransaction.transfer(aliceAddress, 1);
   unsigned = {
     ...unsigned,
     gasPrice: await provider.getGasPrice(),
@@ -104,33 +127,55 @@ const getTxPoolStatus = async (config: TPSConfig) => {
 }
 
 const sendRawTransactions = async (
-  config: TPSConfig, signer: Wallet, chainId: number, aliceAddress: string, token: SimpleToken, txpool_max_length: number,
+  config: TPSConfig, senders: Wallet[], receivers: Wallet[], txpool_max_length: number
 ) => {
   console.log(`\n[  TPS ] Sending ${config.transactions} Axios-RAW transfer() transactions...`);
 
-  let unsigned = config.transaction || await token.populateTransaction.transfer(aliceAddress, 1);;
-  unsigned = {
-    ...unsigned,
-    gasLimit: ethers.BigNumber.from(config.gasLimit),
-    gasPrice: await ethers.provider.getGasPrice(),
-    nonce: await signer.getTransactionCount(),
-    chainId,
-  };
+  let mapping: Mapping[] = [];
+  for (let idx in senders) {
+    let sender = senders[idx];
+    let receiver = receivers[idx];
 
-  console.log(`[  TPS ] Payload:\n${JSON.stringify(unsigned, null, 2)}\n`);
+    let unsigned = config.payloads ? config.payloads[idx] : undefined;
+    if (config.tokenAddress) {
+      let token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
+      unsigned = await token.populateTransaction.transfer(receiver.address, 1);
+    }
+
+    if (!unsigned) throw Error(`[ERROR ] Not able to build "unsigned" payload!`);
+
+    unsigned = {
+      ...unsigned,
+      gasLimit: ethers.BigNumber.from(config.gasLimit),
+      gasPrice: await ethers.provider.getGasPrice(),
+      nonce: await sender.getTransactionCount(),
+      chainId: config.chainId,
+    };
+
+    mapping[idx] = {
+      sender,
+      receiver,
+      unsigned,
+    }
+
+    console.log(`[  TPS ] Payload[${idx}]:\n${JSON.stringify(unsigned, null, 2)}\n`);
+  }
 
   let txpool;
-  let check_txpool = false;
+  let checkTxpool = false;
   let payload;
   let r;
   let last;
 
-  let final_nonce = unsigned.nonce! + config.transactions;
+  let mIdx = 0;
+  let sentTransactions = senders.map(() => 0);
+  let lastHashes = senders.map(() => "");
   let counter = 1;
+  while (counter <= config.transactions) {
 
-  console.log(`[  TPS ] StartingNonce / FinalNonce -> ${unsigned.nonce} / ${final_nonce}`);
-  while (unsigned.nonce! < final_nonce) {
-    payload = await signer.signTransaction(unsigned);
+    if (mIdx >= mapping.length) mIdx = 0;
+
+    payload = await mapping[mIdx].sender.signTransaction(mapping[mIdx].unsigned);
     r = await axios.post(
       config.endpoint,
       {
@@ -147,17 +192,22 @@ const sendRawTransactions = async (
     last = r.data ? r.data.result ? r.data.result : r.data.error : 'Error';
     if (r.status != 200 || last == 'Error') {
       console.log(`[  TPS ] eth_sendRawTransaction Failed!`);
-      unsigned.nonce = await signer.getTransactionCount();
+      mapping[mIdx].unsigned.nonce = await mapping[mIdx].sender.getTransactionCount();
       continue;
     };
 
-    unsigned.nonce!++;
-    if (unsigned.nonce! % 1000 == 0) console.log(`[  TPS ] NextNonce: ${unsigned.nonce} / ${final_nonce}`);
+    mapping[mIdx].unsigned.nonce!++;
+    if (counter % 1000 == 0) {
+      console.log(`[  TPS ][${counter}]`);
+      for (let m of mapping) {
+        console.log(`[  TPS ] ${m.sender.address}: ${m.unsigned.nonce}`);
+      }
+    }
 
     // Check Txpool
-    if (counter % txpool_max_length == 0 || check_txpool) {
+    if (counter % txpool_max_length == 0 || checkTxpool) {
       txpool = await getTxPoolStatus(config);
-      console.log(`[Txpool] NextNonce: ${unsigned.nonce} / ${final_nonce} [len=(${JSON.stringify(txpool.length)})]`);
+      console.log(`[Txpool] Counter: ${counter} [len=(${JSON.stringify(txpool.length)})]`);
       let last_length = 0;
       while (txpool.length >= txpool_max_length) {
         if (last_length !== txpool.length) {
@@ -166,48 +216,77 @@ const sendRawTransactions = async (
         }
         await new Promise(r => setTimeout(r, config.txpoolCheckDelay));
         txpool = await getTxPoolStatus(config);
-        check_txpool = true;
+        checkTxpool = true;
       }
-      if (txpool.length < (txpool_max_length * 0.80)) check_txpool = false;
-      if (check_txpool) await new Promise(r => setTimeout(r, config.txpoolCheckDelay));
+      if (txpool.length < (txpool_max_length * 0.80)) checkTxpool = false;
+      if (checkTxpool) await new Promise(r => setTimeout(r, config.txpoolCheckDelay));
     }
+    sentTransactions[mIdx]++;
+    lastHashes[mIdx] = last;
     counter++;
+    mIdx++;
   };
 
   console.log(`[  TPS ] Done!`);
-  last = await ethers.provider.getTransaction(last);
-  console.log(`[  TPS ] Waiting for the last transaction's receipt...`);
-  return await last.wait();
+
+  console.log(`[  TPS ] Waiting for the last transactions' receipts...`);
+  for (let lastHash of lastHashes) {
+    last = await ethers.provider.getTransaction(lastHash);
+    let r = await last.wait();
+    console.log(`
+      "transactionHash": ${r.transactionHash}\t
+      "from": ${r.from}\t
+      "to": ${r.to}\t
+      "blockNumber": ${r.blockNumber}\t
+      "gasUsed": ${r.gasUsed}
+    `);
+  }
+
+  return sentTransactions;
 };
 
 const main = async () => {
   const config = setup();
   console.log(`\n---- Simple EVM TPS Tool ----\n\n${JSON.stringify(config, null, 2)}\n`);
 
-  let chainId = (await ethers.provider.getNetwork()).chainId;
+  config.chainId = config.chainId === -1 ? (await ethers.provider.getNetwork()).chainId : config.chainId;
   let gasPrice = await ethers.provider.getGasPrice();
   let gasLimit = ethers.BigNumber.from(config.gasLimit);
 
-  const staticProvider = new ethers.providers.StaticJsonRpcProvider(config.endpoint, { name: 'tps', chainId });
+  const staticProvider = new ethers.providers.StaticJsonRpcProvider(config.endpoint, { name: 'tps', chainId: config.chainId });
 
-  let deployer = new ethers.Wallet(config.deployerPK, staticProvider);
-  let other = new ethers.Wallet(config.otherPK, staticProvider);
+  let senders = config.senders.map((key) => new ethers.Wallet(key, staticProvider));
+  let receivers = config.receivers.map((key) => new ethers.Wallet(key, staticProvider));
+
+  let deployer = senders[0];
 
   let token: SimpleToken;
-  let tokenAddress = config.tokenAddress || config.transaction?.to || "";
+  let tokenAddress = config.tokenAddress || config.payloads![0].to || "";
 
-  if (tokenAddress === "" && config.transaction === undefined) {
+  if (tokenAddress === "" && config.payloads === undefined) {
     token = await deploy(deployer);
+
     console.log(`\n[ Token] Calling start()...`);
     let tx1 = await token.start({ gasLimit, gasPrice });
     await tx1.wait();
-    console.log(`[ Token] Calling mintTo()...`);
-    let mintTx = await token.mintTo(deployer.address, 1000000000, { gasLimit, gasPrice });
-    await mintTx.wait();
-    console.log(`[ Token] Calling probe transfer()...`);
+
+    let mintTx;
+    for (let sender of senders) {
+      console.log(`[ Token] Calling mintTo(${sender.address}, ${config.tokenAmountToMint})`);
+      mintTx = await token.mintTo(sender.address, config.tokenAmountToMint, { gasLimit, gasPrice });
+      await mintTx.wait();
+    }
+
     // First call to transfer() is more expensive than the next ones due to initial variables setup.
-    let probeTx = await token.transfer(other.address, 1, { gasLimit, gasPrice });
-    await probeTx.wait();
+    let probeTx;
+    for (let receiver of receivers) {
+      console.log(`[ Token] Calling probe transfer(${receiver.address}, 1})`);
+      probeTx = await token.transfer(receiver.address, 1, { gasLimit, gasPrice });
+      await probeTx.wait();
+    }
+
+    config.tokenAddress = token.address;
+
   } else token = (await ethers.getContractFactory("SimpleToken", deployer)).attach(tokenAddress);
 
   let txpool_max_length = config.txpoolMaxLength;
@@ -215,8 +294,8 @@ const main = async () => {
   if (txpool_max_length === -1) {
     console.log(`\n[Txpool] Trying to get a proper Txpool max length...`);
     let estimateGasTx;
-    if (config.transaction) estimateGasTx = await staticProvider.estimateGas(config.transaction);
-    else estimateGasTx = await token.estimateGas.transfer(other.address, 1, { gasPrice });
+    if (config.payloads?.length) estimateGasTx = await staticProvider.estimateGas(config.payloads[0]);
+    else estimateGasTx = await token.estimateGas.transfer(receivers[0].address, 1, { gasPrice });
     let last_block = await ethers.provider.getBlock("latest");
     console.log(`[Txpool] Block gasLimit   : ${last_block.gasLimit}`);
     console.log(`[Txpool] Txn estimateGas  : ${estimateGasTx}`);
@@ -228,41 +307,36 @@ const main = async () => {
     console.log(`[Txpool] Max length       : ${txpool_max_length}`);
   }
 
-  let amountBefore = await other.getBalance();
-  if (config.tokenAssert) amountBefore = await token.balanceOf(other.address);
+  let amountsBefore = await Promise.all(receivers.map(async (acc) => await acc.getBalance()));
+  if (config.tokenAssert) amountsBefore = await Promise.all(receivers.map(async (acc) => await token.balanceOf(acc.address)));
 
   const start = Date.now();
 
   let execution_time = start;
   if (config.estimate) {
-    await estimateOnly(config, staticProvider, other.address, token);
+    await estimateOnly(config, staticProvider, deployer.address, token);
     execution_time = Date.now() - start;
   } else {
-    let r = await sendRawTransactions(config, deployer, chainId, other.address, token, txpool_max_length);
+    const sentTransactions = await sendRawTransactions(config, senders, receivers, txpool_max_length);
 
     execution_time = Date.now() - start;
 
-    console.log(
-      `\nLast transaction:\n\t
-      "transactionHash": ${r.transactionHash}\t
-      "from": ${r.from}\t
-      "to": ${r.to}\t
-      "blockNumber": ${r.blockNumber}\t
-      "gasUsed": ${r.gasUsed}`
-    );
+    let amountsAfter = await Promise.all(receivers.map(async (acc) => await acc.getBalance()));
+    if (config.tokenAssert) amountsAfter = await Promise.all(receivers.map(async (acc) => await token.balanceOf(acc.address)));
 
-
-    let amountAfter = await other.getBalance();
-    if (config.tokenAssert) amountAfter = await token.balanceOf(other.address);
-    let value = ethers.BigNumber.from(config.transaction?.value || "0").toNumber();
-    if (value) {
-      console.log(
-        `\nAssert(ETH): ${amountBefore} + (${config.transactions} * ${value}) == ${amountAfter} [${(amountBefore.add(config.transactions * value)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
-      );
-    } else {
-      console.log(
-        `\nAssert(balanceOf): ${amountBefore} + (${config.transactions}) == ${amountAfter} [${(amountBefore.add(config.transactions)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
-      );
+    let value = ethers.BigNumber.from(config.payloads![0].value || "0").toNumber();
+    for (let i in amountsBefore) {
+      let amountBefore = amountsBefore[i];
+      let amountAfter = amountsAfter[i];
+      if (value) {
+        console.log(
+          `Assert(ETH): ${amountBefore} + (${sentTransactions[i]} * ${value}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * value)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+        );
+      } else {
+        console.log(
+          `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i])).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+        );
+      }
     }
   }
 
