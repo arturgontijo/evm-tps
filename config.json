@@ -18,7 +18,7 @@
     "tokenAddress": "",
     "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
-    "transactions": 100000,
+    "transactions": 30000,
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,

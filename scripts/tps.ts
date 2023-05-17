@@ -261,7 +261,8 @@ const main = async () => {
   let deployer = senders[0];
 
   let token: SimpleToken;
-  let tokenAddress = config.tokenAddress || config.payloads![0].to || "";
+  let tokenAddress = config.tokenAddress || "";
+  if (config.payloads?.length) tokenAddress = config.payloads[0].to ? config.payloads[0].to : tokenAddress;
 
   if (tokenAddress === "" && config.payloads === undefined) {
     token = await deploy(deployer);
@@ -324,7 +325,10 @@ const main = async () => {
     let amountsAfter = await Promise.all(receivers.map(async (acc) => await acc.getBalance()));
     if (config.tokenAssert) amountsAfter = await Promise.all(receivers.map(async (acc) => await token.balanceOf(acc.address)));
 
-    let value = ethers.BigNumber.from(config.payloads![0].value || "0").toNumber();
+    let value = 0;
+    if (config.payloads?.length) value = ethers.BigNumber.from(config.payloads[0].value || "0").toNumber();
+
+
     for (let i in amountsBefore) {
       let amountBefore = amountsBefore[i];
       let amountAfter = amountsAfter[i];
