@@ -11,7 +11,7 @@ Change network's parameters ("local") in [hardhat.config.json](hardhat.config.ts
 
 Change test's parameters in [config.json](config.json):
 
-1. This will deploy the ERC20 contract and will send 30,000 `transfer()` transactions, asserting final Other's token balance:
+1. This will deploy the ERC20 contract and will send 30,000 `transferLoop()` transactions, asserting final Other's token balance:
 ```json
 {
     "variant": "substrate",
@@ -19,6 +19,7 @@ Change test's parameters in [config.json](config.json):
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
     "tokenAddress": "",
     "tokenAmountToMint": 1000000000,
+    "tokenTransferMultipler": 1,
     "tokenAssert": true,
     "transactions": 30000,
     "gasPrice": "",
@@ -31,7 +32,7 @@ Change test's parameters in [config.json](config.json):
 }
 ```
 
-2. This one already has the token deployed at `tokenAddress`, so it will only send 30,000 `transfer()` transactions + tokenAssert:
+2. This one already has the token deployed at `tokenAddress`, so it will only send 30,000 `transferLoop()` (5 * `transfer()`) transactions + tokenAssert:
 ```json
 {
     "variant": "substrate",
@@ -39,6 +40,7 @@ Change test's parameters in [config.json](config.json):
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
     "tokenAddress": "0x030c5D377E202F52CF30b7f855e09aC0589D53ab",
     "tokenAmountToMint": 1000000000,
+    "tokenTransferMultipler": 5,
     "tokenAssert": true,
     "transactions": 30000,
     "gasPrice": "",
@@ -60,6 +62,7 @@ Change test's parameters in [config.json](config.json):
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
     "tokenAddress": "0x030c5D377E202F52CF30b7f855e09aC0589D53ab",
     "tokenAmountToMint": 1000000000,
+    "tokenTransferMultipler": 1,
     "tokenAssert": true,
     "transactions": 30000,
     "gasPrice": "",
@@ -87,6 +90,7 @@ Change test's parameters in [config.json](config.json):
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
     "tokenAddress": "",
     "tokenAmountToMint": 1000000000,
+    "tokenTransferMultipler": 1,
     "tokenAssert": false,
     "transactions": 30000,
     "gasPrice": "",

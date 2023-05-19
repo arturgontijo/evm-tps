@@ -20,6 +20,7 @@ interface TPSConfig {
   receivers: string[];
   tokenAddress: string;
   tokenAmountToMint: number;
+  tokenTransferMultipler: number;
   tokenAssert: boolean | undefined;
   transactions: number;
   gasPrice: string;
@@ -72,6 +73,7 @@ const setup = () => {
     ],
     tokenAddress: "",
     tokenAmountToMint: 1000000000,
+    tokenTransferMultipler: 1,
     tokenAssert: true,
     transactions: 30000,
     gasPrice: "",
@@ -94,7 +96,7 @@ const setup = () => {
 }
 
 const estimateOnly = async (config: TPSConfig, provider: StaticJsonRpcProvider, aliceAddress: string, token: SimpleToken) => {
-  let unsigned = config.payloads![0] || await token.populateTransaction.transfer(aliceAddress, 1);
+  let unsigned = config.payloads![0] || await token.populateTransaction.transferLoop(config.tokenTransferMultipler, aliceAddress, 1);
   unsigned = {
     ...unsigned,
     gasPrice: await provider.getGasPrice(),
@@ -143,7 +145,7 @@ const sendRawTransactions = async (
     let unsigned = config.payloads ? config.payloads[idx] : undefined;
     if (config.tokenAddress) {
       let token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
-      unsigned = await token.populateTransaction.transfer(receiver.address, 1);
+      unsigned = await token.populateTransaction.transferLoop(config.tokenTransferMultipler, receiver.address, 1);
     }
 
     if (!unsigned) throw Error(`[ERROR ] Not able to build "unsigned" payload!`);
@@ -294,13 +296,20 @@ const main = async () => {
 
   } else token = (await ethers.getContractFactory("SimpleToken", deployer)).attach(tokenAddress);
 
+  let estimateGasTx;
+  if (config.payloads?.length) estimateGasTx = await staticProvider.estimateGas(config.payloads[0]);
+  else estimateGasTx = await token.estimateGas.transferLoop(config.tokenTransferMultipler, receivers[0].address, 1, { gasPrice });
+
+  if (estimateGasTx.gt(gasLimit)) {
+    console.log(`\n[  Gas ] estimateGas > config.gasLimit | ${estimateGasTx} > ${config.gasLimit}`);
+    console.log(`[  Gas ] config.gasLimit=${estimateGasTx}`);
+    config.gasLimit = estimateGasTx.toString();
+  }
+
   let txpool_max_length = config.txpoolMaxLength;
   // We pre calculate the max txn per block we can get and set the txpool max size to 3x as it is.
   if (txpool_max_length === -1) {
     console.log(`\n[Txpool] Trying to get a proper Txpool max length...`);
-    let estimateGasTx;
-    if (config.payloads?.length) estimateGasTx = await staticProvider.estimateGas(config.payloads[0]);
-    else estimateGasTx = await token.estimateGas.transfer(receivers[0].address, 1, { gasPrice });
     let last_block = await ethers.provider.getBlock("latest");
     console.log(`[Txpool] Block gasLimit   : ${last_block.gasLimit}`);
     console.log(`[Txpool] Txn estimateGas  : ${estimateGasTx}`);
@@ -342,7 +351,7 @@ const main = async () => {
         );
       } else {
         console.log(
-          `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i])).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+          `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]} * ${config.tokenTransferMultipler}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * config.tokenTransferMultipler)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
         );
       }
     }

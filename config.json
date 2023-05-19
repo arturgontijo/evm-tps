@@ -16,6 +16,7 @@
     ],
     "tokenAddress": "",
     "tokenAmountToMint": 1000000000,
+    "tokenTransferMultipler": 1,
     "tokenAssert": true,
     "transactions": 30000,
     "gasPrice": "",

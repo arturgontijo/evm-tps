@@ -18,7 +18,7 @@ describe("Lock", function () {
   describe("Test", function () {
     it("One", async () => {
       await expect(token.connect(alice).mintTo(alice.address, amountToMint)).to.be.revertedWith(
-        "Onwer has not started the minting yet."
+        "Onwer has not started the contract yet."
       );
       await expect(token.connect(alice).start()).to.be.revertedWith(
         "Only owner can start it."
@@ -31,7 +31,15 @@ describe("Lock", function () {
       await token.start();
       expect(await token.mintTo(alice.address, amountToMint));
       let aliceAmount = await token.balanceOf(alice.address);
-      expect(aliceAmount).to.equal(amountToMint, `alice should have ${amountToMint} tokens but she has only ${aliceAmount}.`);
+      expect(aliceAmount).to.equal(amountToMint, `alice should have ${amountToMint} tokens but she has ${aliceAmount}.`);
+    });
+
+    it("Three", async () => {
+      await token.start();
+      expect(await token.mintTo(owner.address, amountToMint));
+      expect(await token.transferLoop(7, alice.address, 5));
+      let aliceAmount = await token.balanceOf(alice.address);
+      expect(aliceAmount).to.equal(7 * 5, `alice should have ${7 * 5} tokens but she has ${aliceAmount}.`);
     });
 
   });
