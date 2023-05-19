@@ -30,11 +30,11 @@ contract SimpleToken is ERC20 {
     }
 
     function transferLoop(
-        uint8 n,
+        uint16 n,
         address _to,
         uint _amount
     ) public whenNotPaused {
-        for (uint8 i = 0; i < n; i++) {
+        for (uint16 i = 0; i < n; i++) {
             transfer(_to, _amount);
         }
     }

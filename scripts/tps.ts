@@ -20,7 +20,7 @@ interface TPSConfig {
   receivers: string[];
   tokenAddress: string;
   tokenAmountToMint: number;
-  tokenTransferMultipler: number;
+  tokenTransferMultiplier: number;
   tokenAssert: boolean | undefined;
   transactions: number;
   gasPrice: string;
@@ -73,7 +73,7 @@ const setup = () => {
     ],
     tokenAddress: "",
     tokenAmountToMint: 1000000000,
-    tokenTransferMultipler: 1,
+    tokenTransferMultiplier: 1,
     tokenAssert: true,
     transactions: 30000,
     gasPrice: "",
@@ -96,7 +96,7 @@ const setup = () => {
 }
 
 const estimateOnly = async (config: TPSConfig, provider: StaticJsonRpcProvider, aliceAddress: string, token: SimpleToken) => {
-  let unsigned = config.payloads![0] || await token.populateTransaction.transferLoop(config.tokenTransferMultipler, aliceAddress, 1);
+  let unsigned = config.payloads![0] || await token.populateTransaction.transferLoop(config.tokenTransferMultiplier, aliceAddress, 1);
   unsigned = {
     ...unsigned,
     gasPrice: await provider.getGasPrice(),
@@ -145,7 +145,7 @@ const sendRawTransactions = async (
     let unsigned = config.payloads ? config.payloads[idx] : undefined;
     if (config.tokenAddress) {
       let token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
-      unsigned = await token.populateTransaction.transferLoop(config.tokenTransferMultipler, receiver.address, 1);
+      unsigned = await token.populateTransaction.transferLoop(config.tokenTransferMultiplier, receiver.address, 1);
     }
 
     if (!unsigned) throw Error(`[ERROR ] Not able to build "unsigned" payload!`);
@@ -298,11 +298,11 @@ const main = async () => {
 
   let estimateGasTx;
   if (config.payloads?.length) estimateGasTx = await staticProvider.estimateGas(config.payloads[0]);
-  else estimateGasTx = await token.estimateGas.transferLoop(config.tokenTransferMultipler, receivers[0].address, 1, { gasPrice });
+  else estimateGasTx = await token.estimateGas.transferLoop(config.tokenTransferMultiplier, receivers[0].address, 1, { gasPrice });
 
   if (estimateGasTx.gt(gasLimit)) {
     console.log(`\n[  Gas ] estimateGas > config.gasLimit | ${estimateGasTx} > ${config.gasLimit}`);
-    console.log(`[  Gas ] config.gasLimit=${estimateGasTx}`);
+    console.log(`[  Gas ] Updating config.gasLimit: ${estimateGasTx}`);
     config.gasLimit = estimateGasTx.toString();
   }
 
@@ -351,7 +351,7 @@ const main = async () => {
         );
       } else {
         console.log(
-          `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]} * ${config.tokenTransferMultipler}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * config.tokenTransferMultipler)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+          `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]} * ${config.tokenTransferMultiplier}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * config.tokenTransferMultiplier)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
         );
       }
     }
