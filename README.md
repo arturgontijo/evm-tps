@@ -7,12 +7,13 @@ cd evm-tps
 yarn
 ```
 
-You can change parameters in [config.json](./config.json):
+Change network's parameters ("local") in [hardhat.config.json](hardhat.config.ts):
+
+Change test's parameters in [config.json](config.json):
 
 1. This will deploy the ERC20 contract and will send 30,000 `transfer()` transactions, asserting final Other's token balance:
 ```json
 {
-    "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
     "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000"],
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
@@ -20,6 +21,7 @@ You can change parameters in [config.json](./config.json):
     "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
     "transactions": 30000,
+    "gasPrice": "",
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
@@ -32,7 +34,6 @@ You can change parameters in [config.json](./config.json):
 2. This one already has the token deployed at `tokenAddress`, so it will only send 30,000 `transfer()` transactions + tokenAssert:
 ```json
 {
-    "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
     "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000"],
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
@@ -40,6 +41,7 @@ You can change parameters in [config.json](./config.json):
     "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
     "transactions": 30000,
+    "gasPrice": "",
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
@@ -53,7 +55,6 @@ You can change parameters in [config.json](./config.json):
 3. This one has a `transfer()` hardcoded in the `payloads` field:
 ```json
 {
-    "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
     "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000"],
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
@@ -61,6 +62,7 @@ You can change parameters in [config.json](./config.json):
     "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
     "transactions": 30000,
+    "gasPrice": "",
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
@@ -80,7 +82,6 @@ You can change parameters in [config.json](./config.json):
 4. This one sends ETH (`send()`) via `payloads` field and assert the destination `"to"` ETH balance at the end:
 ```json
 {
-    "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
     "senders": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E342"],
     "receivers": ["0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E005"],
@@ -88,6 +89,7 @@ You can change parameters in [config.json](./config.json):
     "tokenAmountToMint": 1000000000,
     "tokenAssert": false,
     "transactions": 30000,
+    "gasPrice": "",
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,

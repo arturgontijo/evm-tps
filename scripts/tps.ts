@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 import axios from "axios";
 import fs from 'fs';
 
@@ -7,7 +7,7 @@ import { deploy } from "./common";
 import { Wallet } from "@ethersproject/wallet";
 import { BigNumber } from "@ethersproject/bignumber";
 import { SimpleToken } from "../typechain-types";
-import { StaticJsonRpcProvider, TransactionReceipt } from "@ethersproject/providers";
+import { StaticJsonRpcProvider } from "@ethersproject/providers";
 import { PopulatedTransaction } from "ethers/lib/ethers";
 
 const CONFIG_FILE_PATH: string = './config.json';
@@ -22,6 +22,7 @@ interface TPSConfig {
   tokenAmountToMint: number;
   tokenAssert: boolean | undefined;
   transactions: number;
+  gasPrice: string;
   gasLimit: string;
   txpoolMaxLength: number;
   txpoolMultiplier: number;
@@ -49,8 +50,10 @@ interface Mapping {
 }
 
 const setup = () => {
+  // @ts-ignore
+  let url = network.config.url;
   let config: TPSConfig = {
-    endpoint: "http://127.0.0.1:8545",
+    endpoint: url || "http://127.0.0.1:9944",
     variant: "substrate",
     chainId: -1,
     senders: [
@@ -71,6 +74,7 @@ const setup = () => {
     tokenAmountToMint: 1000000000,
     tokenAssert: true,
     transactions: 30000,
+    gasPrice: "",
     gasLimit: "200000",
     txpoolMaxLength: -1,
     txpoolMultiplier: 2,
@@ -250,7 +254,7 @@ const main = async () => {
   console.log(`\n---- Simple EVM TPS Tool ----\n\n${JSON.stringify(config, null, 2)}\n`);
 
   config.chainId = config.chainId === -1 ? (await ethers.provider.getNetwork()).chainId : config.chainId;
-  let gasPrice = await ethers.provider.getGasPrice();
+  let gasPrice = config.gasPrice === "" ? await ethers.provider.getGasPrice() : ethers.BigNumber.from(config.gasPrice);
   let gasLimit = ethers.BigNumber.from(config.gasLimit);
 
   const staticProvider = new ethers.providers.StaticJsonRpcProvider(config.endpoint, { name: 'tps', chainId: config.chainId });

@@ -1,5 +1,4 @@
 {
-    "endpoint": "http://127.0.0.1:9944",
     "variant": "substrate",
     "senders": [
         "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E000",
@@ -19,6 +18,7 @@
     "tokenAmountToMint": 1000000000,
     "tokenAssert": true,
     "transactions": 30000,
+    "gasPrice": "",
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
