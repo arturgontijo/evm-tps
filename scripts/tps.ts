@@ -7,7 +7,6 @@ import { deploy } from "./common";
 import { Wallet } from "@ethersproject/wallet";
 import { BigNumber } from "@ethersproject/bignumber";
 import { SimpleToken } from "../typechain-types";
-import { StaticJsonRpcProvider } from "@ethersproject/providers";
 import { PopulatedTransaction } from "ethers/lib/ethers";
 
 const CONFIG_FILE_PATH: string = './config.json';
@@ -95,17 +94,21 @@ const setup = () => {
   return config;
 }
 
-const estimateOnly = async (config: TPSConfig, provider: StaticJsonRpcProvider, aliceAddress: string, token: SimpleToken) => {
-  let unsigned = config.payloads![0] || await token.populateTransaction.transferLoop(config.tokenTransferMultiplier, aliceAddress, 1);
+const estimateOnly = async (config: TPSConfig, sender: Wallet, receiver: Wallet) => {
+  let unsigned = config.payloads ? config.payloads[0] : undefined;
+  if (config.tokenAddress) {
+    let token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
+    unsigned = await token.populateTransaction.transferLoop(config.tokenTransferMultiplier, receiver.address, 1);
+  }
   unsigned = {
     ...unsigned,
-    gasPrice: await provider.getGasPrice(),
-    chainId: provider.network.chainId,
+    gasPrice: await sender.provider.getGasPrice(),
+    chainId: config.chainId,
   };
   console.log(`[EstGas] Payload:\n${JSON.stringify(unsigned, null, 2)}\n`);
   let estimateGas;
   for (let i = 0; i < config.transactions; i++) {
-    estimateGas = await provider.estimateGas(unsigned);
+    estimateGas = await sender.provider.estimateGas(unsigned);
   }
   console.log(`\nLast estimateGas result: ${estimateGas}`);
 }
@@ -326,33 +329,35 @@ const main = async () => {
 
   const start = Date.now();
 
-  let execution_time = start;
-  if (config.estimate) {
-    await estimateOnly(config, staticProvider, deployer.address, token);
-    execution_time = Date.now() - start;
-  } else {
-    const sentTransactions = await sendRawTransactions(config, senders, receivers, txpool_max_length);
+  let execution_time = -1;
+  if (config.transactions > 0) {
+    if (config.estimate) {
+      await estimateOnly(config, senders[0], receivers[0]);
+      execution_time = Date.now() - start;
+    } else {
+      const sentTransactions = await sendRawTransactions(config, senders, receivers, txpool_max_length);
 
-    execution_time = Date.now() - start;
+      execution_time = Date.now() - start;
 
-    let amountsAfter = await Promise.all(receivers.map(async (acc) => await acc.getBalance()));
-    if (config.tokenAssert) amountsAfter = await Promise.all(receivers.map(async (acc) => await token.balanceOf(acc.address)));
+      let amountsAfter = await Promise.all(receivers.map(async (acc) => await acc.getBalance()));
+      if (config.tokenAssert) amountsAfter = await Promise.all(receivers.map(async (acc) => await token.balanceOf(acc.address)));
 
-    let value = 0;
-    if (config.payloads?.length) value = ethers.BigNumber.from(config.payloads[0].value || "0").toNumber();
+      let value = 0;
+      if (config.payloads?.length) value = ethers.BigNumber.from(config.payloads[0].value || "0").toNumber();
 
 
-    for (let i in amountsBefore) {
-      let amountBefore = amountsBefore[i];
-      let amountAfter = amountsAfter[i];
-      if (value) {
-        console.log(
-          `Assert(ETH): ${amountBefore} + (${sentTransactions[i]} * ${value}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * value)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
-        );
-      } else {
-        console.log(
-          `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]} * ${config.tokenTransferMultiplier}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * config.tokenTransferMultiplier)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
-        );
+      for (let i in amountsBefore) {
+        let amountBefore = amountsBefore[i];
+        let amountAfter = amountsAfter[i];
+        if (value) {
+          console.log(
+            `Assert(ETH): ${amountBefore} + (${sentTransactions[i]} * ${value}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * value)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+          );
+        } else {
+          console.log(
+            `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]} * ${config.tokenTransferMultiplier}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * config.tokenTransferMultiplier)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
+          );
+        }
       }
     }
   }
