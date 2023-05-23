@@ -14,7 +14,9 @@
         "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E008",
         "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E009"
     ],
+    "sendRawTransaction": true,
     "tokenAddress": "",
+    "tokenMethod": "transferLoop",
     "tokenAmountToMint": 1000000000,
     "tokenTransferMultiplier": 1,
     "tokenAssert": true,

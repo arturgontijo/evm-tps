@@ -28,6 +28,11 @@ contract SimpleToken is ERC20 {
         paused = false;
     }
 
+    function pause() public {
+        require(msg.sender == owner, "Only owner can pause it.");
+        paused = true;
+    }
+
     function mintTo(address _to, uint _amount) public whenNotPaused {
         _mint(_to, _amount);
     }

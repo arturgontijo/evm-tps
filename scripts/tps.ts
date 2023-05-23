@@ -17,7 +17,9 @@ interface TPSConfig {
   chainId: number;
   senders: string[];
   receivers: string[];
+  sendRawTransaction: boolean;
   tokenAddress: string;
+  tokenMethod: string;
   tokenAmountToMint: number;
   tokenTransferMultiplier: number;
   tokenAssert: boolean | undefined;
@@ -47,6 +49,7 @@ interface Mapping {
   sender: Wallet;
   receiver: Wallet;
   unsigned: UnsignedTx | PopulatedTransaction;
+  token: SimpleToken | undefined;
 }
 
 const setup = () => {
@@ -70,7 +73,9 @@ const setup = () => {
       "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E008",
       "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E009"
     ],
+    sendRawTransaction: true,
     tokenAddress: "",
+    tokenMethod: "transferLoop",
     tokenAmountToMint: 1000000000,
     tokenTransferMultiplier: 1,
     tokenAssert: true,
@@ -98,7 +103,8 @@ const estimateOnly = async (config: TPSConfig, sender: Wallet, receiver: Wallet)
   let unsigned = config.payloads ? config.payloads[0] : undefined;
   if (config.tokenAddress) {
     let token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
-    unsigned = await token.populateTransaction.transferLoop(config.tokenTransferMultiplier, receiver.address, 1);
+    // @ts-ignore
+    unsigned = await token.populateTransaction[config.tokenMethod](config.tokenTransferMultiplier, receiver.address, 1);
   }
   unsigned = {
     ...unsigned,
@@ -144,11 +150,13 @@ const sendRawTransactions = async (
   for (let idx in senders) {
     let sender = senders[idx];
     let receiver = receivers[idx];
+    let token;
 
     let unsigned = config.payloads ? config.payloads[idx] : undefined;
     if (config.tokenAddress) {
-      let token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
-      unsigned = await token.populateTransaction.transferLoop(config.tokenTransferMultiplier, receiver.address, 1);
+      token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
+      // @ts-ignore
+      unsigned = await token.populateTransaction[config.tokenMethod](config.tokenTransferMultiplier, receiver.address, 1);
     }
 
     if (!unsigned) throw Error(`[ERROR ] Not able to build "unsigned" payload!`);
@@ -165,6 +173,7 @@ const sendRawTransactions = async (
       sender,
       receiver,
       unsigned,
+      token,
     }
 
     console.log(`[  TPS ] Payload[${idx}]:\n${JSON.stringify(unsigned, null, 2)}\n`);
@@ -180,30 +189,41 @@ const sendRawTransactions = async (
   let sentTransactions = senders.map(() => 0);
   let lastHashes = senders.map(() => "");
   let counter = 1;
+
   while (counter <= config.transactions) {
 
     if (mIdx >= mapping.length) mIdx = 0;
 
-    payload = await mapping[mIdx].sender.signTransaction(mapping[mIdx].unsigned);
-    r = await axios.post(
-      config.endpoint,
-      {
-        jsonrpc: "2.0",
-        method: "eth_sendRawTransaction",
-        params: [payload],
-        id: 1
-      },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    if (config.sendRawTransaction) {
+
+      payload = await mapping[mIdx].sender.signTransaction(mapping[mIdx].unsigned);
+
+      r = await axios.post(
+        config.endpoint,
+        {
+          jsonrpc: "2.0",
+          method: "eth_sendRawTransaction",
+          params: [payload],
+          id: 1
+        },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+
+      let err_msg = r.data.error?.message;
+      if (r.status != 200 || err_msg) {
+        console.log(`[  TPS ][ERROR] eth_sendRawTransaction failed with: (http_status=${r.status} | error=${err_msg})!`);
+        break;
+      };
+
+      last = r.data.result;
+
+    } else {
+      // @ts-ignore
+      let tx = await mapping[mIdx].token![config.tokenMethod](config.tokenTransferMultiplier, mapping[mIdx].receiver.address, 1, { gasLimit: config.gasLimit });
+      last = tx.hash;
+    }
 
     if (config.delay > 0) await new Promise(r => setTimeout(r, config.delay));
-
-    last = r.data ? r.data.result ? r.data.result : r.data.error : 'Error';
-    if (r.status != 200 || last == 'Error') {
-      console.log(`[  TPS ] eth_sendRawTransaction Failed!`);
-      mapping[mIdx].unsigned.nonce = await mapping[mIdx].sender.getTransactionCount();
-      continue;
-    };
 
     mapping[mIdx].unsigned.nonce!++;
     if (counter % 1000 == 0) {
@@ -301,7 +321,8 @@ const main = async () => {
 
   let estimateGasTx;
   if (config.payloads?.length) estimateGasTx = await staticProvider.estimateGas(config.payloads[0]);
-  else estimateGasTx = await token.estimateGas.transferLoop(config.tokenTransferMultiplier, receivers[0].address, 1, { gasPrice });
+  // @ts-ignore
+  else estimateGasTx = await token.estimateGas[config.tokenMethod](config.tokenTransferMultiplier, receivers[0].address, 1, { gasPrice });
 
   if (estimateGasTx.gt(gasLimit)) {
     console.log(`\n[  Gas ] estimateGas > config.gasLimit | ${estimateGasTx} > ${config.gasLimit}`);
