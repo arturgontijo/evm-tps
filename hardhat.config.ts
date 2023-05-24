@@ -13,6 +13,13 @@ const config: HardhatUserConfig = {
         "0xE2033D436CE0614ACC1EE15BD20428B066013F827A15CC78B063F83AC0BAAE64",
       ],
     },
+    polygon: {
+      url: "https://rpc-mumbai.maticvigil.com/",
+      accounts: [
+        "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E777",
+        "0x99B3C12287537E38C90A9219D4CB074A89A16E9CDB20BF85728EBD97C343E888",
+      ],
+    },
   },
 };
 
