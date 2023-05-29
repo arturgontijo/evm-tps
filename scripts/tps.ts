@@ -377,7 +377,7 @@ const main = async () => {
           console.log(
             `Assert(ETH): ${amountBefore} + (${sentTransactions[i]} * ${value}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * value)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
           );
-        } else {
+        } else if (config.tokenAssert) {
           console.log(
             `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]} * ${config.tokenTransferMultiplier}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * config.tokenTransferMultiplier)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
           );

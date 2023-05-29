@@ -1,8 +1,30 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 
+const optimizerSettings = {
+  settings: {
+    optimizer: {
+      enabled: true,
+      runs: 200,
+    },
+    outputSelection: {
+      "*": {
+        "*": ["devdoc", "userdoc", "metadata"],
+        "": [],
+      },
+    },
+  },
+}
+
 const config: HardhatUserConfig = {
-  solidity: "0.8.18",
+  solidity: {
+    compilers: [
+      {
+        version: "0.8.18",
+        ...optimizerSettings
+      }
+    ]
+  },
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {},
