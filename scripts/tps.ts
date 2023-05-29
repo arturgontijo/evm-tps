@@ -146,6 +146,9 @@ const sendRawTransactions = async (
 ) => {
   console.log(`\n[  TPS ] Sending ${config.transactions} Axios-RAW transfer() transactions...`);
 
+  let gasLimit = ethers.BigNumber.from(config.gasLimit);
+  let gasPrice = await ethers.provider.getGasPrice();
+
   let mapping: Mapping[] = [];
   for (let idx in senders) {
     let sender = senders[idx];
@@ -163,8 +166,8 @@ const sendRawTransactions = async (
 
     unsigned = {
       ...unsigned,
-      gasLimit: ethers.BigNumber.from(config.gasLimit),
-      gasPrice: await ethers.provider.getGasPrice(),
+      gasLimit,
+      gasPrice,
       nonce: await sender.getTransactionCount(),
       chainId: config.chainId,
     };
@@ -219,7 +222,7 @@ const sendRawTransactions = async (
 
     } else {
       // @ts-ignore
-      let tx = await mapping[mIdx].token![config.tokenMethod](config.tokenTransferMultiplier, mapping[mIdx].receiver.address, 1, { gasLimit: config.gasLimit });
+      let tx = await mapping[mIdx].token![config.tokenMethod](config.tokenTransferMultiplier, mapping[mIdx].receiver.address, 1, { gasLimit, gasPrice });
       last = tx.hash;
     }
 
@@ -374,7 +377,7 @@ const main = async () => {
           console.log(
             `Assert(ETH): ${amountBefore} + (${sentTransactions[i]} * ${value}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * value)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
           );
-        } else {
+        } else if (config.tokenAssert) {
           console.log(
             `Assert(balanceOf): ${amountBefore} + (${sentTransactions[i]} * ${config.tokenTransferMultiplier}) == ${amountAfter} [${(amountBefore.add(sentTransactions[i] * config.tokenTransferMultiplier)).eq(amountAfter) ? 'OK' : 'FAIL'}]`
           );
