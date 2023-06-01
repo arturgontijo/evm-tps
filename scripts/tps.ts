@@ -9,7 +9,7 @@ import { BigNumber } from "@ethersproject/bignumber";
 import { SimpleToken } from "../typechain-types";
 import { PopulatedTransaction } from "ethers/lib/ethers";
 
-const CONFIG_FILE_PATH: string = './config.json';
+const CONFIG_FILE_PATH: string = process.env.EVM_TPS_CONFIG || './config.json';
 
 interface TPSConfig {
   endpoint: string;
@@ -28,6 +28,7 @@ interface TPSConfig {
   gasLimit: string;
   txpoolMaxLength: number;
   txpoolMultiplier: number;
+  txpoolCheckInterval: number;
   txpoolCheckDelay: number;
   delay: number;
   estimate: boolean | undefined;
@@ -84,6 +85,7 @@ const setup = () => {
     gasLimit: "200000",
     txpoolMaxLength: -1,
     txpoolMultiplier: 2,
+    txpoolCheckInterval: 1000,
     txpoolCheckDelay: 250,
     delay: 0,
     estimate: false,
@@ -101,7 +103,7 @@ const setup = () => {
 
 const estimateOnly = async (config: TPSConfig, sender: Wallet, receiver: Wallet) => {
   let unsigned = config.payloads ? config.payloads[0] : undefined;
-  if (config.tokenAddress) {
+  if (!unsigned && config.tokenAddress) {
     let token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
     // @ts-ignore
     unsigned = await token.populateTransaction[config.tokenMethod](config.tokenTransferMultiplier, receiver.address, 1);
@@ -156,7 +158,7 @@ const sendRawTransactions = async (
     let token;
 
     let unsigned = config.payloads ? config.payloads[idx] : undefined;
-    if (config.tokenAddress) {
+    if (!unsigned && config.tokenAddress) {
       token = (await ethers.getContractFactory("SimpleToken", sender)).attach(config.tokenAddress);
       // @ts-ignore
       unsigned = await token.populateTransaction[config.tokenMethod](config.tokenTransferMultiplier, receiver.address, 1);
@@ -237,7 +239,7 @@ const sendRawTransactions = async (
     }
 
     // Check Txpool
-    if (counter % txpool_max_length == 0 || checkTxpool) {
+    if (counter % config.txpoolCheckInterval == 0 || checkTxpool) {
       txpool = await getTxPoolStatus(config);
       console.log(`[Txpool] Counter: ${counter} [len=(${JSON.stringify(txpool.length)})]`);
       let last_length = 0;
@@ -252,6 +254,7 @@ const sendRawTransactions = async (
       }
       if (txpool.length < (txpool_max_length * 0.80)) checkTxpool = false;
       if (checkTxpool) await new Promise(r => setTimeout(r, config.txpoolCheckDelay));
+      else console.log(`[Txpool] len=(${JSON.stringify(txpool.length)}) is ready!`);
     }
     sentTransactions[mIdx]++;
     lastHashes[mIdx] = last;
@@ -294,7 +297,7 @@ const main = async () => {
 
   let token: SimpleToken;
   let tokenAddress = config.tokenAddress || "";
-  if (config.payloads?.length) tokenAddress = config.payloads[0].to ? config.payloads[0].to : tokenAddress;
+  if (tokenAddress === "" && config.payloads?.length) tokenAddress = config.payloads[0].to ? config.payloads[0].to : tokenAddress;
 
   if (tokenAddress === "" && config.payloads === undefined) {
     token = await deploy(deployer);
