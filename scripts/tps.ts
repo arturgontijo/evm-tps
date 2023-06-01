@@ -143,10 +143,10 @@ const getTxPoolStatus = async (config: TPSConfig) => {
   return r.data.result;
 }
 
-const sendTransactions = async (
+const sendRawTransactions = async (
   config: TPSConfig, senders: Wallet[], receivers: Wallet[], txpool_max_length: number
 ) => {
-  console.log(`\n[  TPS ] Sending ${config.transactions} transfer() transactions...`);
+  console.log(`\n[  TPS ] Sending ${config.transactions} Axios-RAW transfer() transactions...`);
 
   let gasLimit = ethers.BigNumber.from(config.gasLimit);
   let gasPrice = await ethers.provider.getGasPrice();
@@ -186,6 +186,8 @@ const sendTransactions = async (
 
   let txpool;
   let checkTxpool = false;
+  let payload;
+  let r;
   let last;
 
   let mIdx = 0;
@@ -197,15 +199,33 @@ const sendTransactions = async (
 
     if (mIdx >= mapping.length) mIdx = 0;
 
-    let tx;
-    if (config.sendRawTransaction) {
-      let payload = await mapping[mIdx].sender.signTransaction(mapping[mIdx].unsigned);
-      tx = await mapping[mIdx].sender.provider.sendTransaction(payload);
-    } else {
-      tx = await mapping[mIdx].sender.sendTransaction(mapping[mIdx].unsigned);
-    }
+    payload = await mapping[mIdx].sender.signTransaction(mapping[mIdx].unsigned);
 
-    last = tx.hash;
+    if (config.sendRawTransaction) {
+
+      r = await axios.post(
+        config.endpoint,
+        {
+          jsonrpc: "2.0",
+          method: "eth_sendRawTransaction",
+          params: [payload],
+          id: 1
+        },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+
+      let err_msg = r.data.error?.message;
+      if (r.status != 200 || err_msg) {
+        console.log(`[  TPS ][ERROR] eth_sendRawTransaction failed with: (http_status=${r.status} | error=${err_msg})!`);
+        break;
+      };
+
+      last = r.data.result;
+
+    } else {
+      let tx = await mapping[mIdx].sender.sendTransaction(mapping[mIdx].unsigned);
+      last = tx.hash;
+    }
 
     if (config.delay > 0) await new Promise(r => setTimeout(r, config.delay));
 
@@ -340,7 +360,7 @@ const main = async () => {
       await estimateOnly(config, senders[0], receivers[0]);
       execution_time = Date.now() - start;
     } else {
-      const sentTransactions = await sendTransactions(config, senders, receivers, txpool_max_length);
+      const sentTransactions = await sendRawTransactions(config, senders, receivers, txpool_max_length);
 
       execution_time = Date.now() - start;
 
