@@ -28,6 +28,7 @@ Change test's parameters in [config.json](config.json):
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
+    "txpoolCheckInterval": 1000,
     "txpoolCheckDelay": 250,
     "delay": 0,
     "estimate": false
@@ -51,6 +52,7 @@ Change test's parameters in [config.json](config.json):
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
+    "txpoolCheckInterval": 1000,
     "txpoolCheckDelay": 250,
     "delay": 0,
     "estimate": false
@@ -75,6 +77,7 @@ Change test's parameters in [config.json](config.json):
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
+    "txpoolCheckInterval": 1000,
     "txpoolCheckDelay": 250,
     "delay": 0,
     "estimate": false,
@@ -105,6 +108,7 @@ Change test's parameters in [config.json](config.json):
     "gasLimit": "200000",
     "txpoolMaxLength": -1,
     "txpoolMultiplier": 2,
+    "txpoolCheckInterval": 1000,
     "txpoolCheckDelay": 250,
     "delay": 0,
     "estimate": false,
@@ -122,4 +126,10 @@ To run the script:
 
 ```shell
 npx hardhat run scripts/tps.ts --network local
+```
+
+To run it with a different `config.json` file (eg `config2.json`):
+
+```shell
+EVM_TPS_CONFIG="path/to/config2.json" npx hardhat run scripts/tps.ts --network local
 ```
