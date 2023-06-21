@@ -455,12 +455,14 @@ const setup = async () => {
   resetMaps();
 
   await setupAccounts(config, EVM_TPS_SENDERS_FILE, EVM_TPS_RECEIVERS_FILE);
-  await updateNonces(config.accounts);
 
   await checkTokenBalances(config, deployer);
   await checkETHBalances(config, deployer);
 
   config = await setTxpool(config);
+
+  await updateNonces(config.accounts);
+
   return config!;
 }
 
