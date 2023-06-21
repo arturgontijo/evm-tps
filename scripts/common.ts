@@ -7,8 +7,7 @@ export const deploy = async (deployer: Wallet | SignerWithAddress) => {
     const SimpleToken = await ethers.getContractFactory("SimpleToken", deployer);
     const token = await SimpleToken.deploy("SimpleToken", "STK", { gasLimit: 10000000, gasPrice: await ethers.provider.getGasPrice() });
     let tx = await token.deployed();
-    console.log(`SimpleToken deployed to ${token.address}`);
+    console.log(`SimpleToken deployed at ${token.address}`);
     await token.deployTransaction.wait();
-    console.log(`Done`);
     return token;
 }
