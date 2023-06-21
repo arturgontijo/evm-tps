@@ -62,7 +62,6 @@ const sendersMap = new Map<number, Wallet>();
 const receiversMap = new Map<number, Wallet>();
 
 const nonceMap = new Map<number, number>();
-const inUseMap = new Map<number, boolean>();
 
 const receiptsMap = new Map<string, any>();
 let txPoolLength = 0;
@@ -329,7 +328,7 @@ const sendRawTransaction = async (
   let payload = await sender.signTransaction(unsigned);
   let data = await post(config, "eth_sendRawTransaction", [payload])
   let txHash = data.result;
-  if (txHash === undefined) console.log(`${JSON.stringify(data)}`)
+  if (txHash === undefined) console.log(`[ERROR] sendRawTransaction() -> ${JSON.stringify(data)}`)
   return txHash;
 }
 
@@ -486,12 +485,6 @@ const main = async () => {
 
     await checkTxpool(config)
 
-    while (inUseMap.get(nextKey)!) {
-      nextKey++;
-      if (nextKey >= config.accounts) nextKey = 0;
-    }
-    inUseMap.set(nextKey, true);
-
     let k = nextKey;
     nextKey++;
     if (nextKey >= config.accounts) nextKey = 0;
@@ -514,7 +507,6 @@ const main = async () => {
       console.error(`[ERROR][req: ${zeroPad(counter, 5)}][acc: ${zeroPad(k, 5)}] sendRawTransaction: ${error.message}`);
       res.status(500).send(`Internal error: ${error.message}`);
     }
-    inUseMap.set(k, false);
   });
 
   app.get("/getBlock", async (req: any, res: any) => {
