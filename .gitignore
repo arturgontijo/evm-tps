@@ -9,7 +9,4 @@ typechain-types
 cache
 artifacts
 
-data/config.json
-data/senders.json
-data/receivers.json
-
+data
