@@ -26,6 +26,6 @@ jobs:
           push: true
           file: Dockerfile
           tags: |
-            parity/evm-tps:latest
+            paritytech/evm-tps:latest
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
